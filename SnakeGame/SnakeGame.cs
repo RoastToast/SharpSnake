@@ -1,7 +1,10 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using System;
+using System.Collections.Generic;
 using System.Net;
+using System.Reflection;
 using System.Text;
 
 namespace SnakeGame
@@ -14,21 +17,30 @@ namespace SnakeGame
         GraphicsDeviceManager graphics;
         SpriteBatch spriteBatch;
 
+        int delay = 0;
+
         int snakeDir = 0; // 1,2,3,4 north, east, south, west
         Texture2D snakeBlock;
         Vector2 _snakePosition;
-        int _snakeWidth = 16;
-        int _snakeHeight = 16;
+        private const int _blockWidth = 16;
+        private const int _blockHeight = 16;
+        List<Vector2> _snakeTail;
+
+        Vector2 _applePosition;
+
+        Random rand;
 
         public SnakeGame()
         {
             graphics = new GraphicsDeviceManager(this);
             Content.RootDirectory = "Content";
 
-            this.IsFixedTimeStep = true;
-            this.graphics.SynchronizeWithVerticalRetrace = true;
-            this.TargetElapsedTime = new System.TimeSpan(0, 0, 0, 0, 264); // 33ms = 30fps
+            _snakeTail = new List<Vector2>();
 
+            rand = new Random();
+            _applePosition = new Vector2();
+            _applePosition.X = rand.Next(1, 30) * _blockWidth - _blockWidth / 2;
+            _applePosition.Y = rand.Next(1, 20) * _blockHeight - _blockHeight / 2;
             this.Activated += (sender, args) =>
             {
                 this.Window.Title = "Active Application";
@@ -63,13 +75,13 @@ namespace SnakeGame
 
 
             Rectangle snakeRect = new Rectangle(
-                this.graphics.PreferredBackBufferWidth / 2 - _snakeWidth / 2,
-                this.graphics.PreferredBackBufferHeight / 2 - _snakeHeight / 2,
-                _snakeWidth - 1,
-                _snakeHeight - 1
+                16 * _blockHeight,
+                11 * _blockWidth,
+                _blockWidth - 1,
+                _blockHeight - 1
             );
-            _snakePosition = new Vector2(this.graphics.PreferredBackBufferWidth / 2 - _snakeWidth / 2,
-                this.graphics.PreferredBackBufferHeight / 2 - _snakeHeight / 2);
+            _snakePosition = new Vector2(this.graphics.PreferredBackBufferWidth / 2 - _blockWidth / 2,
+                this.graphics.PreferredBackBufferHeight / 2 - _blockHeight / 2);
             Color[] data = new Color[snakeRect.Width * snakeRect.Height];
             snakeBlock = new Texture2D(GraphicsDevice, snakeRect.Width, snakeRect.Height);
 
@@ -97,6 +109,32 @@ namespace SnakeGame
         /// <param name="gameTime">Provides a snapshot of timing values.</param>
         protected override void Update(GameTime gameTime)
         {
+            if (_snakePosition.X == _applePosition.X && _snakePosition.Y == _applePosition.Y)
+            {
+                _applePosition.X = rand.Next(0, 31) * _blockWidth - _blockWidth / 2;
+                _applePosition.Y = rand.Next(0, 21) * _blockHeight - _blockHeight / 2;
+                Vector2 newTail = new Vector2();
+                switch (snakeDir)
+                {
+                    case 1:
+                        newTail.X = _snakePosition.X;
+                        newTail.Y = _snakePosition.Y - _blockHeight;
+                        break;
+                    case 2:
+                        newTail.X = _snakePosition.X - _blockWidth;
+                        newTail.Y = _snakePosition.Y;
+                        break;
+                    case 3:
+                        newTail.X = _snakePosition.X;
+                        newTail.Y = _snakePosition.Y + _blockHeight;
+                        break;
+                    case 4:
+                        newTail.X = _snakePosition.X + _blockWidth;
+                        newTail.Y = _snakePosition.Y;
+                        break;
+                }
+                _snakeTail.Add(newTail);
+            }
 
             KeyboardState state = Keyboard.GetState();
 
@@ -123,25 +161,35 @@ namespace SnakeGame
                 snakeDir = 1; //Up
             if (state.IsKeyDown(Keys.Down))
                 snakeDir = 3; //Down
-
-            switch (snakeDir)
+            if (delay == 7)
             {
-                case 0:
-                    break;
-                case 1:
-                    _snakePosition.Y -= _snakeHeight;
-                    break;
-                case 2:
-                    _snakePosition.X += _snakeWidth;
-                    break;
-                case 3:
-                    _snakePosition.Y += _snakeHeight;
-                    break;
-                case 4:
-                    _snakePosition.X -= _snakeWidth;
-                    break;
+                delay = 0;
+                switch (snakeDir)
+                {
+                    case 0:
+                        break;
+                    case 1:
+                        updateTail();
+                        _snakePosition.Y -= _blockHeight;
+                        break;
+                    case 2:
+                        updateTail();
+                        _snakePosition.X += _blockWidth;
+                        break;
+                    case 3:
+                        updateTail();
+                        _snakePosition.Y += _blockHeight;
+                        break;
+                    case 4:
+                        updateTail();
+                        _snakePosition.X -= _blockWidth;
+                        break;
+                }
             }
-
+            else
+            {
+                delay++;
+            }
             base.Update(gameTime);
         }
 
@@ -153,11 +201,29 @@ namespace SnakeGame
         {
             GraphicsDevice.Clear(Color.Black);
             spriteBatch.Begin();
+            spriteBatch.Draw(snakeBlock, _applePosition, Color.Red);
             spriteBatch.Draw(snakeBlock, _snakePosition, Color.Lime);
+            for (int i = 0; i < _snakeTail.Count; i++)
+            {
+                spriteBatch.Draw(snakeBlock, _snakeTail[i], Color.Lime);
+            }
             spriteBatch.End();
             // TODO: Add your drawing code here
 
             base.Draw(gameTime);
+        }
+        protected void updateTail()
+        {
+            if (_snakeTail.Count == 1)
+                _snakeTail[0] = _snakePosition;
+            if (_snakeTail.Count > 1)
+            {
+                for (int i = 0; i < _snakeTail.Count - 1; i++)
+                {
+                    _snakeTail[i] = _snakeTail[i + 1];
+                }
+                _snakeTail[_snakeTail.Count - 1] = _snakePosition;
+            }
         }
     }
 }
